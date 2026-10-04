@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-config
+data:
+  # Key/value pairs (become env vars via envFrom)
+  POSTGRES_DB: shopdb
+  PGDATA: /var/lib/postgresql/data/pgdata
+  
+  # A whole file stored as one key. Postgres runs any *.sql file found in
+  # /docker-entrypoint-initdb.d the FIRST time the database is created.
+  init.sql: |
+    CREATE TABLE products (
+      id    SERIAL PRIMARY KEY,
+      name  TEXT NOT NULL,
+      price NUMERIC(8,2) NOT NULL
+    );
+    INSERT INTO products (name, price) VALUES
+      ('Keyboard', 49.99),
+      ('Mouse',    19.50),
+      ('Monitor', 179.00);

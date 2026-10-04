@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1                 # a plain DB should not run multiple replicas
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres         # the Service finds the pod using this label
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16
+        ports:
+        - containerPort: 5432
+ 
+        # Load ALL keys from the ConfigMap and the Secret as env vars.
+        # Result inside the container:
+        #   POSTGRES_DB, PGDATA          (from db-config)
+        #   POSTGRES_USER, POSTGRES_PASSWORD (from db-secret)
+        envFrom:
+        - configMapRef:
+            name: db-config
+        - secretRef:
+            name: db-secret
+ 
+        # Example of picking ONE key instead of loading everything:
+        # env:
+        # - name: SOME_VAR
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: db-secret
+        #       key: POSTGRES_PASSWORD
+ 
+        volumeMounts:
+        # ConfigMap key "init.sql" appears as a FILE here
+        - name: init-script
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+        # Where Postgres stores its data
+        - name: data
+          mountPath: /var/lib/postgresql/data
+ 
+        # Pod only receives traffic once Postgres accepts connections
+        readinessProbe:
+          exec:
+            command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+          initialDelaySeconds: 5
+          periodSeconds: 5
+ 
+        resources:
+          requests: { cpu: 100m, memory: 128Mi }
+          limits:   { cpu: 500m, memory: 512Mi }
+ 
+      volumes:
+      - name: init-script
+        configMap:
+          name: db-config
+          items:               # mount only the init.sql key, not the env-style keys
+          - key: init.sql
+            path: init.sql
+      - name: data
+        emptyDir: {}           # DEMO ONLY: data is lost when the pod is deleted.
+                               # For real use, replace with a PersistentVolumeClaim.
